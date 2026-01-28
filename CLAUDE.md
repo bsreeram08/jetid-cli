@@ -1,106 +1,31 @@
+# JetID CLI Guide
 
-Default to using Bun instead of Node.js.
+## Build & Test Commands
+- **Install**: `bun install`
+- **Run CLI**: `bun index.ts`
+- **Run Tests**: `bun test`
+- **Run Single Test**: `bun test <filename>` (e.g., `bun test index.test.ts`)
+- **Type Check**: `bunx tsc --noEmit`
+- **Update Dependencies**: `bun update`
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
-
-## APIs
-
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+## Code Style Guidelines
+- **Imports**: Named imports only. `import { generateID } from "@jetit/id";`.
+- **Types**: Use `import type` or `import { type ... }`.
+- **Formatting**: 2 spaces, double quotes, semicolons.
+- **Naming**: `camelCase` for functions/variables, `SCREAMING_SNAKE_CASE` for type unions (e.g., `SHORTID_TYPE`).
+- **Architecture**: Functional/Procedural CLI logic in `index.ts`. Avoid classes.
+- **Error Handling**: `try/catch` with `instanceof Error` checks. Use `process.exit(1)` for fatal CLI errors.
+- **API**: Prefer Bun native APIs (`Bun.argv`, `fetch`, `Bun.spawnSync`).
 
 ## Testing
+Use `bun:test` for all tests. Tests should follow the "should [action] [expected result]" naming convention.
 
-Use `bun test` to run tests.
-
-```ts#index.test.ts
+```typescript
 import { test, expect } from "bun:test";
+import { generateID } from "@jetit/id";
 
-test("hello world", () => {
-  expect(1).toBe(1);
+test("should generate valid hex id", () => {
+  const id = generateID("HEX", "05");
+  expect(id).toMatch(/^[0-9a-f]{18}$/);
 });
 ```
-
-## Frontend
-
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
-
-Server:
-
-```ts#index.ts
-import index from "./index.html"
-
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
-
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
-
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
-
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-
-// import .css files directly and it works
-import './index.css';
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
