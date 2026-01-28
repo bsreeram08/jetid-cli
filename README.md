@@ -1,6 +1,24 @@
 # jetid - High-Performance ID CLI
 
-A CLI tool to generate and convert lexically sortable, cryptographically random IDs using the `@jetit/id` library.
+A powerful, architecture-aware CLI tool to generate and convert lexically sortable, cryptographically random IDs using the [`@jetit/id`](https://github.com/jetit/id) library.
+
+## About
+
+`jetid` is designed for distributed systems that require unique, verifiable, and sortable identifiers. Unlike standard UUIDs, `jetid` identifiers are:
+- **Lexically Sortable**: Chronologically ordered by default.
+- **Type-Aware**: Includes a 2-character type identifier to prevent domain cross-contamination.
+- **Compact**: Significantly shorter than UUIDs while maintaining collision resistance.
+- **Verifiable**: Built-in checksum to validate ID integrity without database lookups.
+- **Contextual**: Optional 8-bit context field for sharding or metadata.
+
+This CLI provides a convenient way to integrate these IDs into your shell scripts, CI/CD pipelines, or manual debugging workflows.
+
+## Features
+
+- **Multi-Platform**: Native binaries for Linux, macOS, and Windows (x64 & ARM64).
+- **Fast**: Built with Bun for near-instant execution.
+- **Self-Updating**: Built-in update mechanism to stay current with the latest features.
+- **Zero Dependencies**: Single standalone binary for your architecture.
 
 ## Installation
 
@@ -52,6 +70,9 @@ bun test
 
 The project includes a GitHub Action for automated multi-arch builds. To trigger a release:
 1. Update version in `package.json`
-2. Tag your commit: `git tag v1.0.3`
-3. Push the tag: `git push origin v1.0.3`
-4. The action will compile standalone binaries for Linux, macOS, and Windows.
+2. Tag your commit: `git tag vX.X.X`
+3. Push the tag: `git push origin vX.X.X`
+
+## License
+
+MIT © [Sreeram](https://github.com/bsreeram08)
