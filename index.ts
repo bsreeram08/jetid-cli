@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { parseArgs } from "util";
 import { generateID, generateShortId, convertIdRepresentation, type SHORTID_TYPE, type REPRESENTATION_TYPE } from "@jetit/id";
+import { spawnSync } from "child_process";
 import pkg from "./package.json";
 
 const { values, positionals } = parseArgs({
@@ -17,6 +18,7 @@ const { values, positionals } = parseArgs({
     from: { type: "string" },
     to: { type: "string" },
     "check-updates": { type: "boolean" },
+    update: { type: "boolean" },
     help: { type: "boolean", short: "h" },
     version: { type: "boolean", short: "v" },
   },
@@ -43,6 +45,7 @@ Options:
   --from <rep>       Source representation (HEX, URLSAFE, DECIMAL, BINARY)
   --to <rep>         Target representation (HEX, URLSAFE, DECIMAL, BINARY)
   --check-updates    Check for a newer version on GitHub
+  --update           Update jetid-cli to the latest version
   -h, --help         Show this help message
   -v, --version      Show version info
 
@@ -60,7 +63,7 @@ if (values.version) {
   process.exit(0);
 }
 
-async function checkUpdates() {
+async function checkUpdates(silent = false) {
   try {
     const response = await fetch("https://api.github.com/repos/bsreeram08/jetid-cli/releases/latest", {
       headers: { "User-Agent": "jetid-cli" },
@@ -71,18 +74,50 @@ async function checkUpdates() {
     const currentVersion = pkg.version || "1.0.0";
 
     if (latestVersion !== currentVersion) {
-      console.log(`Update available: v${currentVersion} -> v${latestVersion}`);
-      console.log(`Download at: https://github.com/bsreeram08/jetid-cli/releases/latest`);
+      if (!silent) {
+        console.log(`Update available: v${currentVersion} -> v${latestVersion}`);
+        console.log(`Run 'jetid --update' to update automatically.`);
+      }
+      return latestVersion;
     } else {
-      console.log("You are on the latest version.");
+      if (!silent) console.log("You are on the latest version.");
+      return null;
     }
   } catch (error) {
-    console.error("Error checking for updates:", error instanceof Error ? error.message : String(error));
+    if (!silent) console.error("Error checking for updates:", error instanceof Error ? error.message : String(error));
+    return null;
+  }
+}
+
+async function update() {
+  const latest = await checkUpdates(true);
+  if (!latest) {
+    console.log("Already on the latest version.");
+    return;
+  }
+
+  console.log(`Updating to v${latest} via GitHub...`);
+  try {
+    // Since the user installs via github (e.g. bun install -g bsreeram08/jetid-cli)
+    // we use the same command to update.
+    const result = spawnSync("bun", ["install", "-g", "bsreeram08/jetid-cli"], { stdio: "inherit" });
+    if (result.status === 0) {
+      console.log("Successfully updated to the latest version!");
+    } else {
+      throw new Error("Update failed. Try running 'bun install -g bsreeram08/jetid-cli' manually.");
+    }
+  } catch (error) {
+    console.error("Error during update:", error instanceof Error ? error.message : String(error));
   }
 }
 
 if (values["check-updates"]) {
   await checkUpdates();
+  process.exit(0);
+}
+
+if (values.update) {
+  await update();
   process.exit(0);
 }
 
@@ -100,7 +135,6 @@ try {
     const from = fromVal as REPRESENTATION_TYPE;
     const to = toVal as REPRESENTATION_TYPE;
     
-    // DECIMAL needs bigint conversion for library compatibility
     const input = from === "DECIMAL" ? BigInt(idToConvert) : idToConvert;
     result = convertIdRepresentation(input as any, from, to);
   } else if (values.short !== undefined) {
