@@ -4,8 +4,15 @@ A CLI tool to generate and convert lexically sortable, cryptographically random 
 
 ## Installation
 
+To install globally:
+```bash
+bun install -g jetid-cli
+```
+
+Or for local development:
 ```bash
 bun install
+bun link
 ```
 
 ## Usage
@@ -14,23 +21,23 @@ bun install
 
 ```bash
 # Generate a HEX ID with type '05'
-bun index.ts --hex '05'
+jetid --hex '05'
 
 # Generate a URL-safe ID (default)
-bun index.ts --urlsafe
+jetid --urlsafe
 
 # Generate a Short ID (9 characters)
-bun index.ts --short '0A'
+jetid --short '0A'
 ```
 
 ### Convert IDs
 
 ```bash
 # Convert a HEX ID to URLSAFE
-bun index.ts 83d5396608c1b00c01 --from HEX --to URLSAFE
+jetid 83d5396608c1b00c01 --from HEX --to URLSAFE
 
 # Convert a URLSAFE ID to DECIMAL
-bun index.ts g9U5ZgjBsAwB --from URLSAFE --to DECIMAL
+jetid g9U5ZgjBsAwB --from URLSAFE --to DECIMAL
 ```
 
 ### Options
@@ -49,6 +56,7 @@ bun test
 ## Build and Release
 
 The project includes a GitHub Action for automated builds and releases. To trigger a release:
-1. Tag your commit: `git tag v1.0.0`
-2. Push the tag: `git push origin v1.0.0`
-3. The action will compile a standalone binary and create a GitHub release.
+1. Update version in `package.json`
+2. Tag your commit: `git tag v1.0.1`
+3. Push the tag: `git push origin v1.0.1`
+4. The action will compile a standalone binary and create a GitHub release.
