@@ -1,6 +1,18 @@
 #!/usr/bin/env bun
 import { parseArgs } from "util";
-import { generateID, generateShortId, convertIdRepresentation, type SHORTID_TYPE, type REPRESENTATION_TYPE } from "@jetit/id";
+import {
+  generateID,
+  generateShortId,
+  convertIdRepresentation,
+  validateId,
+  explainId,
+  compareIds,
+  getType,
+  getContext,
+  generateRRN,
+  type SHORTID_TYPE,
+  type REPRESENTATION_TYPE,
+} from "@jetit/id";
 import { spawnSync } from "child_process";
 import pkg from "./package.json";
 
@@ -21,6 +33,12 @@ const { values, positionals } = parseArgs({
     update: { type: "boolean" },
     help: { type: "boolean", short: "h" },
     version: { type: "boolean", short: "v" },
+    validate: { type: "boolean" },
+    explain: { type: "boolean" },
+    compare: { type: "string" },
+    getType: { type: "boolean" },
+    getContext: { type: "boolean" },
+    rrn: { type: "string" },
   },
   strict: false,
   allowPositionals: true,
@@ -44,6 +62,12 @@ Options:
   --convert <id>     ID to convert (can also be a positional argument)
   --from <rep>       Source representation (HEX, URLSAFE, DECIMAL, BINARY)
   --to <rep>         Target representation (HEX, URLSAFE, DECIMAL, BINARY)
+  --validate         Validate an ID
+  --explain          Explain an ID components
+  --compare <id2>    Compare current ID with another ID (ignoring context)
+  --getType          Extract type identifier from an ID
+  --getContext       Extract context field from an ID
+  --rrn [stan]       Generate a Retrieval Reference Number (optional STAN)
   --check-updates    Check for a newer version on GitHub
   --update           Update jetid-cli to the latest version
   -h, --help         Show this help message
@@ -54,6 +78,10 @@ Examples:
   jetid --urlsafe
   jetid --convert g6bwhyBZKFkd --from URLSAFE --to HEX
   jetid ABC123DEF --from URLSAFE --to DECIMAL
+  jetid --validate g6bwhyBZKFkd
+  jetid --explain g6bwhyBZKFkd
+  jetid g6bwhyBZKFkd --getType
+  jetid --rrn
 `);
   process.exit(0);
 }
@@ -124,25 +152,53 @@ if (typeof values.clientId === "string") options.clientId = values.clientId;
 if (typeof values.context === "string") options.context = values.context;
 
 try {
-  let result: string | bigint | undefined;
+  let result: any;
   const idToConvert = (values.convert as string) || positionals[0];
 
-  if (idToConvert) {
+  if (values.rrn !== undefined) {
+    const stan = typeof values.rrn === "string" ? parseInt(values.rrn, 10) : undefined;
+    result = generateRRN(stan);
+  } else if (idToConvert) {
     const fromVal = typeof values.from === "string" ? values.from.toUpperCase() : "URLSAFE";
     const toVal = typeof values.to === "string" ? values.to.toUpperCase() : "HEX";
     const from = fromVal as REPRESENTATION_TYPE;
     const to = toVal as REPRESENTATION_TYPE;
-    
+
     const input = from === "DECIMAL" ? BigInt(idToConvert) : idToConvert;
-    result = convertIdRepresentation(input as any, from, to);
+
+    if (values.validate) {
+      const typeId = typeof values.hex === "string" || typeof values.urlsafe === "string" || typeof values.decimal === "string" || typeof values.binary === "string"
+        ? (values.hex || values.urlsafe || values.decimal || values.binary) as string
+        : undefined;
+      result = validateId(input as any, from, typeId);
+    } else if (values.explain) {
+      result = JSON.stringify(explainId(input as any, from), (key, value) => (typeof value === "bigint" ? value.toString() : value), 2);
+    } else if (values.compare) {
+      const id2 = values.compare as string;
+      const input2 = from === "DECIMAL" ? BigInt(id2) : id2;
+      result = compareIds(input as any, input2 as any, from);
+    } else if (values.getType) {
+      result = getType(input as any, from);
+    } else if (values.getContext) {
+      result = getContext(input as any, from);
+    } else {
+      result = convertIdRepresentation(input as any, from, to);
+    }
   } else if (values.short !== undefined) {
-    result = generateShortId(values.short as SHORTID_TYPE, options);
+    const typeId = typeof values.short === "string" ? values.short : undefined;
+    if (!typeId) {
+      throw new Error("Short ID requires a type identifier (e.g., --short '0A')");
+    }
+    result = generateShortId(typeId as SHORTID_TYPE, options);
   } else if (values.hex !== undefined) {
-    result = generateID("HEX", values.hex as string, options);
+    const typeId = typeof values.hex === "string" ? values.hex : undefined;
+    result = generateID("HEX", typeId, options);
   } else if (values.decimal !== undefined) {
-    result = generateID("DECIMAL", values.decimal as string, options);
+    const typeId = typeof values.decimal === "string" ? values.decimal : undefined;
+    result = generateID("DECIMAL", typeId, options);
   } else if (values.binary !== undefined) {
-    result = generateID("BINARY", values.binary as string, options);
+    const typeId = typeof values.binary === "string" ? values.binary : undefined;
+    result = generateID("BINARY", typeId, options);
   } else {
     const typeId = typeof values.urlsafe === "string" ? values.urlsafe : undefined;
     result = generateID("URLSAFE", typeId, options);
