@@ -33,7 +33,7 @@ fi
 
 echo "Detecting latest version..."
 LATEST_RELEASE=$(curl -s $GITHUB_API)
-VERSION=$(echo "$LATEST_RELEASE" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+VERSION=$(echo "$LATEST_RELEASE" | grep -o '"tag_name": *"[^"]*"' | head -n 1 | cut -d '"' -f 4)
 
 if [ -z "$VERSION" ]; then
   echo "Could not find latest version."
@@ -48,7 +48,7 @@ if [ "$OS" = "windows-latest" ]; then
   BINARY_NAME="$BINARY_NAME.exe"
 fi
 
-DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep "browser_download_url" | grep "$BINARY_NAME" | head -n 1 | cut -d '"' -f 4)
+DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": *"[^"]*"' | grep "$BINARY_NAME" | head -n 1 | cut -d '"' -f 4)
 
 if [ -z "$DOWNLOAD_URL" ]; then
   echo "Could not find binary for $OS-$ARCH in release $VERSION."
