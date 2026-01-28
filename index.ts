@@ -144,7 +144,7 @@ async function update() {
 }
 
 async function uninstall() {
-  const exePath = Bun.argv[0];
+  const exePath = process.execPath;
   if (!exePath) {
     console.error("Error: Could not determine executable path.");
     return;
