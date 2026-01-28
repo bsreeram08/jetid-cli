@@ -1,5 +1,5 @@
 {
-  "name": "id-cli",
+  "name": "jetid-cli",
   "version": "1.0.0",
   "bin": {
     "jetid": "./index.ts"
@@ -7,6 +7,10 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bsreeram08/jetid-cli.git"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
