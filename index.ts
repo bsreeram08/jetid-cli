@@ -42,6 +42,7 @@ const { values, positionals } = parseArgs({
     getType: { type: "boolean" },
     getContext: { type: "boolean" },
     rrn: { type: "string" },
+    uninstall: { type: "boolean" },
   },
   strict: false,
   allowPositionals: true,
@@ -71,6 +72,7 @@ Options:
   --getType          Extract type identifier from an ID
   --getContext       Extract context field from an ID
   --rrn [stan]       Generate a Retrieval Reference Number (optional STAN)
+  --uninstall        Uninstall jetid-cli from your system
   --check-updates    Check for a newer version on GitHub
   --update           Update jetid-cli to the latest version
   -h, --help         Show this help message
@@ -85,6 +87,7 @@ Examples:
   jetid --explain g6bwhyBZKFkd
   jetid g6bwhyBZKFkd --getType
   jetid --rrn
+  jetid --uninstall
 `);
   process.exit(0);
 }
@@ -123,7 +126,7 @@ async function checkUpdates(silent = false) {
 async function update() {
   const latest = await checkUpdates(true);
   if (!latest) {
-    console.log("Already on the latest version.");
+    console.log(`Already on the latest version (v${pkg.version || "1.0.0"}).`);
     return;
   }
 
@@ -140,6 +143,36 @@ async function update() {
   }
 }
 
+async function uninstall() {
+  const exePath = Bun.argv[0];
+  if (!exePath) {
+    console.error("Error: Could not determine executable path.");
+    return;
+  }
+  if (exePath.includes(".bun") || exePath.includes("node_modules") || !exePath.includes("jetid")) {
+    console.error(`Error: Cannot uninstall. Current executable path (${exePath}) does not look like a global installation.`);
+    return;
+  }
+
+  console.log(`Uninstalling jetid from ${exePath}...`);
+  try {
+    const result = spawnSync("rm", [exePath]);
+    if (result.status === 0) {
+      console.log("Successfully uninstalled jetid.");
+    } else {
+      console.log("Permission denied. Trying with sudo...");
+      const sudoResult = spawnSync("sudo", ["rm", exePath], { stdio: "inherit" });
+      if (sudoResult.status === 0) {
+        console.log("Successfully uninstalled jetid.");
+      } else {
+        throw new Error("Uninstall failed.");
+      }
+    }
+  } catch (error) {
+    console.error("Error during uninstall:", error instanceof Error ? error.message : String(error));
+  }
+}
+
 if (values["check-updates"] || values["check-update"]) {
   await checkUpdates();
   process.exit(0);
@@ -147,6 +180,11 @@ if (values["check-updates"] || values["check-update"]) {
 
 if (values.update) {
   await update();
+  process.exit(0);
+}
+
+if (values.uninstall) {
+  await uninstall();
   process.exit(0);
 }
 
