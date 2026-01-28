@@ -5,7 +5,9 @@ import {
   generateShortId,
   convertIdRepresentation,
   validateId,
+  validateShortId,
   explainId,
+  getShortIdComponents,
   compareIds,
   getType,
   getContext,
@@ -167,12 +169,44 @@ try {
     const input = from === "DECIMAL" ? BigInt(idToConvert) : idToConvert;
 
     if (values.validate) {
-      const typeId = typeof values.hex === "string" || typeof values.urlsafe === "string" || typeof values.decimal === "string" || typeof values.binary === "string"
-        ? (values.hex || values.urlsafe || values.decimal || values.binary) as string
-        : undefined;
-      result = validateId(input as any, from, typeId);
+      if (typeof idToConvert === "string" && idToConvert.length === 9) {
+        result = validateShortId(idToConvert);
+      } else {
+        const typeId = typeof values.hex === "string" || typeof values.urlsafe === "string" || typeof values.decimal === "string" || typeof values.binary === "string"
+          ? (values.hex || values.urlsafe || values.decimal || values.binary) as string
+          : undefined;
+        result = validateId(input as any, from, typeId);
+      }
     } else if (values.explain) {
-      result = JSON.stringify(explainId(input as any, from), (key, value) => (typeof value === "bigint" ? value.toString() : value), 2);
+      let details: any;
+      if (typeof idToConvert === "string" && idToConvert.length === 9) {
+        details = getShortIdComponents(idToConvert);
+        console.log(`\n\x1b[1m\x1b[34mShort ID Breakdown\x1b[0m`);
+        console.log(`\x1b[90m--------------------------------\x1b[0m`);
+        console.log(`\x1b[1mID:\x1b[0m              ${idToConvert}`);
+        console.log(`\x1b[1mValid:\x1b[0m           ${details.isValid ? "\x1b[32mYes\x1b[0m" : "\x1b[31mNo\x1b[0m"}`);
+        if (details.isValid) {
+          console.log(`\x1b[1mTimestamp:\x1b[0m       ${details.timestamp.toISOString()}`);
+          console.log(`\x1b[1mType Identifier:\x1b[0m ${details.typeIdentifier || "None"}`);
+          if (details.context) console.log(`\x1b[1mContext:\x1b[0m         ${details.context}`);
+        }
+      } else {
+        details = explainId(input as any, from);
+        console.log(`\n\x1b[1m\x1b[34mJetID Component Breakdown\x1b[0m`);
+        console.log(`\x1b[90m--------------------------------\x1b[0m`);
+        console.log(`\x1b[1mURL-Safe:\x1b[0m        \x1b[36m${details.id.urlsafe}\x1b[0m`);
+        console.log(`\x1b[1mHex:\x1b[0m             ${details.id.hex}`);
+        console.log(`\x1b[1mDecimal:\x1b[0m         ${details.id.decimal.toString()}`);
+        console.log(`\x1b[90m--------------------------------\x1b[0m`);
+        console.log(`\x1b[1mTimestamp:\x1b[0m       ${details.createdTimestampReadable}`);
+        console.log(`\x1b[1mClient ID:\x1b[0m       \x1b[35m${details.clientId}\x1b[0m`);
+        console.log(`\x1b[1mSequence:\x1b[0m        ${details.sequence.toString()}`);
+        console.log(`\x1b[1mType ID:\x1b[0m         \x1b[33m${details.typeIdentifier || "None"}\x1b[0m`);
+        if (details.context) {
+          console.log(`\x1b[1mContext:\x1b[0m         \x1b[32m${details.context}\x1b[0m`);
+        }
+      }
+      result = undefined;
     } else if (values.compare) {
       const id2 = values.compare as string;
       const input2 = from === "DECIMAL" ? BigInt(id2) : id2;
