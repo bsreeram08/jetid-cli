@@ -149,7 +149,7 @@ async function uninstall() {
     console.error("Error: Could not determine executable path.");
     return;
   }
-  if (exePath.includes(".bun") || exePath.includes("node_modules") || !exePath.includes("jetid")) {
+  if (exePath.includes("node_modules") || !exePath.includes("jetid")) {
     console.error(`Error: Cannot uninstall. Current executable path (${exePath}) does not look like a global installation.`);
     return;
   }
