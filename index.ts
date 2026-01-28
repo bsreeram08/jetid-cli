@@ -32,6 +32,7 @@ const { values, positionals } = parseArgs({
     from: { type: "string" },
     to: { type: "string" },
     "check-updates": { type: "boolean" },
+    "check-update": { type: "boolean" },
     update: { type: "boolean" },
     help: { type: "boolean", short: "h" },
     version: { type: "boolean", short: "v" },
@@ -139,7 +140,7 @@ async function update() {
   }
 }
 
-if (values["check-updates"]) {
+if (values["check-updates"] || values["check-update"]) {
   await checkUpdates();
   process.exit(0);
 }
