@@ -110,7 +110,7 @@ async function checkUpdates(silent = false) {
       }
       return latestVersion;
     } else {
-      if (!silent) console.log("You are on the latest version.");
+      if (!silent) console.log(`Already on the latest version (v${currentVersion}).`);
       return null;
     }
   } catch (error) {
