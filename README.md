@@ -4,14 +4,25 @@ A powerful, architecture-aware CLI tool to generate and convert lexically sortab
 
 ## About
 
-`jetid` is designed for distributed systems that require unique, verifiable, and sortable identifiers. Unlike standard UUIDs, `jetid` identifiers are:
-- **Lexically Sortable**: Chronologically ordered by default.
-- **Type-Aware**: Includes a 2-character type identifier to prevent domain cross-contamination.
-- **Compact**: Significantly shorter than UUIDs while maintaining collision resistance.
-- **Verifiable**: Built-in checksum to validate ID integrity without database lookups.
-- **Contextual**: Optional 8-bit context field for sharding or metadata.
+`jetid` is a high-performance command-line utility for managing distributed, unique identifiers. It leverages the `@jetit/id` library to produce IDs that are better suited for modern distributed architectures than standard UUIDs.
 
-This CLI provides a convenient way to integrate these IDs into your shell scripts, CI/CD pipelines, or manual debugging workflows.
+### Why use `jetid`?
+
+*   **Chronological Sorting**: Unlike UUID v4, `jetid` IDs are k-sortable, meaning they maintain chronological order when sorted lexicographically. This significantly improves database indexing performance.
+*   **Type Safety**: Every ID can be tagged with a 2-character hex type (e.g., `01` for users, `02` for orders). This allows your application logic to verify that an ID belongs to the correct entity type without a database lookup.
+*   **Small Footprint**: At ~12-15 characters (URL-safe), these IDs are much smaller than the 36-character UUID string, saving storage and bandwidth.
+*   **Collision Resistance**: Uses a combination of high-resolution timestamps, client identifiers, and sequence numbers to ensure uniqueness across distributed nodes.
+*   **Integrity Checks**: Includes a 4-bit checksum, allowing the CLI and your apps to detect corrupted or malformed IDs immediately.
+
+## ID Structure
+
+A standard 80-bit `jetid` (URL-safe) consists of:
+- **Timestamp (32 bits)**: Second-level precision with a custom epoch.
+- **Client ID (20 bits)**: Up to 1 million unique generators.
+- **Sequence (7 bits)**: Prevents collisions within the same millisecond.
+- **Checksum (4 bits)**: For integrity validation.
+- **Context (8 bits)**: Optional metadata or sharding info.
+- **Type Identifier (8 bits)**: Domain-specific entity tagging.
 
 ## Features
 
