@@ -57,13 +57,23 @@ fi
 
 TMP_DIR=$(mktemp -d)
 INSTALL_DIR="/usr/local/bin"
-TARGET="$INSTALL_DIR/jetid"
 
-# Use sudo if needed
-SUDO=""
-if [ ! -w "$INSTALL_DIR" ]; then
-  SUDO="sudo"
+BUN_BIN="$HOME/.bun/bin/jetid"
+if [ -L "$BUN_BIN" ] || [ -f "$BUN_BIN" ]; then
+  echo "Detected existing jetid in Bun's bin: $BUN_BIN"
+  INSTALL_DIR="$HOME/.bun/bin"
+  SUDO=""
+  if [ ! -w "$HOME/.bun/bin" ]; then
+    SUDO="sudo"
+  fi
+else
+  SUDO=""
+  if [ ! -w "$INSTALL_DIR" ]; then
+    SUDO="sudo"
+  fi
 fi
+
+TARGET="$INSTALL_DIR/jetid"
 
 echo "Downloading..."
 curl -L "$DOWNLOAD_URL" -o "$TMP_DIR/jetid"
