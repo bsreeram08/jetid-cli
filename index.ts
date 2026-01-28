@@ -96,15 +96,13 @@ async function update() {
     return;
   }
 
-  console.log(`Updating to v${latest} via GitHub...`);
+  console.log(`Updating to v${latest}...`);
   try {
-    // Since the user installs via github (e.g. bun install -g bsreeram08/jetid-cli)
-    // we use the same command to update.
-    const result = spawnSync("bun", ["install", "-g", "bsreeram08/jetid-cli"], { stdio: "inherit" });
+    const result = spawnSync("sh", ["-c", "curl -fsSL https://raw.githubusercontent.com/bsreeram08/jetid-cli/main/install.sh | bash"], { stdio: "inherit" });
     if (result.status === 0) {
       console.log("Successfully updated to the latest version!");
     } else {
-      throw new Error("Update failed. Try running 'bun install -g bsreeram08/jetid-cli' manually.");
+      throw new Error("Update failed. Try running the installation command manually.");
     }
   } catch (error) {
     console.error("Error during update:", error instanceof Error ? error.message : String(error));
