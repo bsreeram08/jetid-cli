@@ -51,6 +51,37 @@ jetid --urlsafe
 
 # Generate a Short ID (9 characters)
 jetid --short '0A'
+
+# Generate a Decimal or Binary ID
+jetid --decimal
+jetid --binary
+```
+
+### Generate and Immediately Chain Operations
+
+Operations (`--explain`, `--validate`, `--getType`, `--getContext`, `--to`) can be chained directly onto any generation command:
+
+```bash
+# Generate a HEX ID and explain all its components
+jetid --hex '05' --explain
+
+# Generate a URL-safe ID and validate it
+jetid --urlsafe --validate
+
+# Generate a HEX ID and convert it to URLSAFE in one step
+jetid --hex '05' --to URLSAFE
+
+# Generate a URLSAFE ID and extract its type identifier
+jetid --urlsafe '05' --getType
+
+# Generate a Decimal ID and explain it
+jetid --decimal --explain
+
+# Generate a Short ID and explain it
+jetid --short '0A' --explain
+
+# Generate a Short ID and extract its type
+jetid --short '0A' --getType
 ```
 
 ### Convert IDs
@@ -61,6 +92,31 @@ jetid 83d5396608c1b00c01 --from HEX --to URLSAFE
 
 # Convert a URLSAFE ID to DECIMAL
 jetid g9U5ZgjBsAwB --from URLSAFE --to DECIMAL
+
+# Convert a URLSAFE ID to BINARY
+jetid g9U5ZgjBsAwB --from URLSAFE --to BINARY
+
+# Convert a DECIMAL ID back to URLSAFE
+jetid 2434536435913247950341 --from DECIMAL --to URLSAFE
+```
+
+### Inspect and Validate IDs
+
+```bash
+# Explain all components of a URLSAFE ID (shows all 4 representations)
+jetid --explain g9U5ZgjBsAwB
+
+# Validate a URLSAFE ID
+jetid --validate g9U5ZgjBsAwB
+
+# Extract the type identifier
+jetid g9U5ZgjBsAwB --getType
+
+# Extract the context field
+jetid g9U5ZgjBsAwB --getContext
+
+# Compare two IDs (ignoring context)
+jetid g9U5ZgjBsAwB --compare anotherIdHere
 ```
 
 ### Options

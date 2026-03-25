@@ -18,8 +18,33 @@ import {
 import { spawnSync } from "child_process";
 import pkg from "./package.json";
 
+/**
+ * Pre-process argv so that generation flags (--hex, --urlsafe, --decimal, --binary)
+ * do not greedily consume subsequent operation flags as their optional type-id value.
+ * When a generation flag is immediately followed by another flag (starts with "-"),
+ * we rewrite it as "--flag=" so parseArgs sees an empty string value and leaves the
+ * next flag intact.
+ */
+function preprocessArgs(args: string[]): string[] {
+  const generationFlags = new Set(["--hex", "--urlsafe", "--decimal", "--binary"]);
+  const result: string[] = [];
+  for (const [i, arg] of args.entries()) {
+    if (generationFlags.has(arg)) {
+      const next = args[i + 1];
+      if (!next || next.startsWith("-")) {
+        result.push(`${arg}=`);
+      } else {
+        result.push(arg);
+      }
+    } else {
+      result.push(arg);
+    }
+  }
+  return result;
+}
+
 const { values, positionals } = parseArgs({
-  args: Bun.argv.slice(2),
+  args: preprocessArgs(Bun.argv.slice(2)),
   options: {
     hex: { type: "string" },
     urlsafe: { type: "string" },
@@ -80,7 +105,12 @@ Options:
 
 Examples:
   jetid --hex '05'
-  jetid --urlsafe
+  jetid --hex '05' --explain
+  jetid --hex '05' --to URLSAFE
+  jetid --urlsafe --validate
+  jetid --urlsafe --getType
+  jetid --decimal --explain
+  jetid --short '0A' --explain
   jetid --convert g6bwhyBZKFkd --from URLSAFE --to HEX
   jetid ABC123DEF --from URLSAFE --to DECIMAL
   jetid --validate g6bwhyBZKFkd
@@ -194,48 +224,75 @@ if (typeof values.context === "string") options.context = values.context;
 
 try {
   let result: any;
-  const idToConvert = (values.convert as string) || positionals[0];
+  let isShortId = false;
+  let idToProcess: string | bigint | undefined;
+  let fromRepresentation: REPRESENTATION_TYPE = "URLSAFE";
+
+  const rawId = (values.convert as string | undefined) || positionals[0];
 
   if (values.rrn !== undefined) {
     const stan = typeof values.rrn === "string" ? parseInt(values.rrn, 10) : undefined;
     result = generateRRN(stan);
-  } else if (idToConvert) {
-    const fromVal = typeof values.from === "string" ? values.from.toUpperCase() : "URLSAFE";
-    const toVal = typeof values.to === "string" ? values.to.toUpperCase() : "HEX";
-    const from = fromVal as REPRESENTATION_TYPE;
-    const to = toVal as REPRESENTATION_TYPE;
+  } else if (rawId) {
+    fromRepresentation = (typeof values.from === "string" ? values.from.toUpperCase() : "URLSAFE") as REPRESENTATION_TYPE;
+    idToProcess = fromRepresentation === "DECIMAL" ? BigInt(rawId) : rawId;
+    isShortId = rawId.length === 9 && typeof values.from !== "string" && validateShortId(rawId);
+  } else if (values.short !== undefined) {
+    const typeId = typeof values.short === "string" ? values.short : undefined;
+    if (!typeId) {
+      throw new Error("Short ID requires a type identifier (e.g., --short '0A')");
+    }
+    idToProcess = generateShortId(typeId as SHORTID_TYPE, options);
+    isShortId = true;
+  } else if (values.hex !== undefined) {
+    const typeId = typeof values.hex === "string" && values.hex !== "" ? values.hex : undefined;
+    idToProcess = generateID("HEX", typeId, options);
+    fromRepresentation = "HEX";
+  } else if (values.decimal !== undefined) {
+    const typeId = typeof values.decimal === "string" && values.decimal !== "" ? values.decimal : undefined;
+    idToProcess = generateID("DECIMAL", typeId, options);
+    fromRepresentation = "DECIMAL";
+  } else if (values.binary !== undefined) {
+    const typeId = typeof values.binary === "string" && values.binary !== "" ? values.binary : undefined;
+    idToProcess = generateID("BINARY", typeId, options);
+    fromRepresentation = "BINARY";
+  } else {
+    const typeId = typeof values.urlsafe === "string" && values.urlsafe !== "" ? values.urlsafe : undefined;
+    idToProcess = generateID("URLSAFE", typeId, options);
+    fromRepresentation = "URLSAFE";
+  }
 
-    const input = from === "DECIMAL" ? BigInt(idToConvert) : idToConvert;
+  if (idToProcess !== undefined) {
+    const toVal = (typeof values.to === "string" ? values.to.toUpperCase() : "HEX") as REPRESENTATION_TYPE;
 
     if (values.validate) {
-      if (typeof idToConvert === "string" && idToConvert.length === 9) {
-        result = validateShortId(idToConvert);
+      if (isShortId) {
+        result = validateShortId(idToProcess as string);
       } else {
-        const typeId = typeof values.hex === "string" || typeof values.urlsafe === "string" || typeof values.decimal === "string" || typeof values.binary === "string"
-          ? (values.hex || values.urlsafe || values.decimal || values.binary) as string
-          : undefined;
-        result = validateId(input as any, from, typeId);
+        const typeId = [values.hex, values.urlsafe, values.decimal, values.binary]
+          .find((v): v is string => typeof v === "string" && v !== "");
+        result = validateId(idToProcess as any, fromRepresentation, typeId);
       }
     } else if (values.explain) {
-      let details: any;
-      if (typeof idToConvert === "string" && idToConvert.length === 9) {
-        details = getShortIdComponents(idToConvert);
+      if (isShortId) {
+        const details = getShortIdComponents(idToProcess as string);
         console.log(`\n\x1b[1m\x1b[34mShort ID Breakdown\x1b[0m`);
         console.log(`\x1b[90m--------------------------------\x1b[0m`);
-        console.log(`\x1b[1mID:\x1b[0m              ${idToConvert}`);
+        console.log(`\x1b[1mID:\x1b[0m              ${idToProcess}`);
         console.log(`\x1b[1mValid:\x1b[0m           ${details.isValid ? "\x1b[32mYes\x1b[0m" : "\x1b[31mNo\x1b[0m"}`);
         if (details.isValid) {
-          console.log(`\x1b[1mTimestamp:\x1b[0m       ${details.timestamp.toISOString()}`);
+          console.log(`\x1b[1mTimestamp:\x1b[0m       ${details.timestamp!.toISOString()}`);
           console.log(`\x1b[1mType Identifier:\x1b[0m ${details.typeIdentifier || "None"}`);
           if (details.context) console.log(`\x1b[1mContext:\x1b[0m         ${details.context}`);
         }
       } else {
-        details = explainId(input as any, from);
+        const details = explainId(idToProcess as any, fromRepresentation);
         console.log(`\n\x1b[1m\x1b[34mJetID Component Breakdown\x1b[0m`);
         console.log(`\x1b[90m--------------------------------\x1b[0m`);
         console.log(`\x1b[1mURL-Safe:\x1b[0m        \x1b[36m${details.id.urlsafe}\x1b[0m`);
         console.log(`\x1b[1mHex:\x1b[0m             ${details.id.hex}`);
         console.log(`\x1b[1mDecimal:\x1b[0m         ${details.id.decimal.toString()}`);
+        console.log(`\x1b[1mBinary:\x1b[0m          ${details.id.binary}`);
         console.log(`\x1b[90m--------------------------------\x1b[0m`);
         console.log(`\x1b[1mTimestamp:\x1b[0m       ${details.createdTimestampReadable}`);
         console.log(`\x1b[1mClient ID:\x1b[0m       \x1b[35m${details.clientId}\x1b[0m`);
@@ -248,36 +305,31 @@ try {
       result = undefined;
     } else if (values.compare) {
       const id2 = values.compare as string;
-      const input2 = from === "DECIMAL" ? BigInt(id2) : id2;
-      result = compareIds(input as any, input2 as any, from);
+      const input2 = fromRepresentation === "DECIMAL" ? BigInt(id2) : id2;
+      result = compareIds(idToProcess as any, input2 as any, fromRepresentation);
     } else if (values.getType) {
-      result = getType(input as any, from);
+      if (isShortId) {
+        const components = getShortIdComponents(idToProcess as string);
+        result = components.isValid ? (components.typeIdentifier ?? null) : null;
+      } else {
+        result = getType(idToProcess as any, fromRepresentation);
+      }
     } else if (values.getContext) {
-      result = getContext(input as any, from);
+      if (isShortId) {
+        const components = getShortIdComponents(idToProcess as string);
+        result = components.isValid ? (components.context ?? null) : null;
+      } else {
+        result = getContext(idToProcess as any, fromRepresentation);
+      }
+    } else if (rawId || values.to) {
+      if (isShortId) throw new Error("Short IDs cannot be converted between representations");
+      result = convertIdRepresentation(idToProcess as any, fromRepresentation, toVal);
     } else {
-      result = convertIdRepresentation(input as any, from, to);
+      result = idToProcess;
     }
-  } else if (values.short !== undefined) {
-    const typeId = typeof values.short === "string" ? values.short : undefined;
-    if (!typeId) {
-      throw new Error("Short ID requires a type identifier (e.g., --short '0A')");
-    }
-    result = generateShortId(typeId as SHORTID_TYPE, options);
-  } else if (values.hex !== undefined) {
-    const typeId = typeof values.hex === "string" ? values.hex : undefined;
-    result = generateID("HEX", typeId, options);
-  } else if (values.decimal !== undefined) {
-    const typeId = typeof values.decimal === "string" ? values.decimal : undefined;
-    result = generateID("DECIMAL", typeId, options);
-  } else if (values.binary !== undefined) {
-    const typeId = typeof values.binary === "string" ? values.binary : undefined;
-    result = generateID("BINARY", typeId, options);
-  } else {
-    const typeId = typeof values.urlsafe === "string" ? values.urlsafe : undefined;
-    result = generateID("URLSAFE", typeId, options);
   }
 
-  if (result !== undefined) {
+  if (result !== undefined && result !== null) {
     console.log(result.toString());
   }
 } catch (error) {
