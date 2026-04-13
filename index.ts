@@ -72,6 +72,10 @@ function isExplainFormat(value: string): value is "table" | "json" | "yaml" | "l
   return ["table", "json", "yaml", "list"].includes(value);
 }
 
+function isImplicitShortId(input: string | bigint, hasFromFlag: boolean): input is string {
+  return typeof input === "string" && input.length === 9 && !hasFromFlag && validateShortId(input);
+}
+
 function toYaml(value: unknown, indent = 0): string {
   const pad = "  ".repeat(indent);
 
@@ -316,12 +320,12 @@ try {
   let idToProcess: string | bigint | undefined;
   let generatedIds: Array<string | bigint> | undefined;
   let fromRepresentation: REPRESENTATION_TYPE = "URLSAFE";
-  const rawExplainFormat = typeof values.format === "string" ? values.format.toLowerCase() : "table";
+  const formatInput = typeof values.format === "string" ? values.format.toLowerCase() : "table";
   const count = typeof values.count === "string" ? Number.parseInt(values.count, 10) : 1;
-  if (!isExplainFormat(rawExplainFormat)) {
+  if (!isExplainFormat(formatInput)) {
     throw new Error("Invalid format. Use one of: table, json, yaml, list");
   }
-  const explainFormat: ExplainFormat = rawExplainFormat;
+  const explainFormat: ExplainFormat = formatInput;
   if (!Number.isInteger(count) || count < 1) {
     throw new Error("count must be a positive integer");
   }
@@ -398,8 +402,7 @@ try {
             : rawId.split(",").map((id) => id.trim()).filter(Boolean)
           : [idToProcess];
       const entries: ExplainEntry[] = idsToExplain.map((currentId) => {
-        const currentIsShort =
-          typeof currentId === "string" && currentId.length === 9 && typeof values.from !== "string" && validateShortId(currentId);
+        const currentIsShort = isImplicitShortId(currentId, typeof values.from === "string");
         if (currentIsShort) {
           const details = getShortIdComponents(currentId);
           return {
@@ -430,11 +433,11 @@ try {
       } else if (explainFormat === "list") {
         entries.forEach((entry, index) => {
           if (entry.kind === "SHORT") {
-            console.log(`${index + 1}. ${entry.input} | short | valid=${entry.isValid ? "yes" : "no"} | type=${entry.typeIdentifier ?? "None"} | context=${entry.context ?? "None"}`);
+            const line = `${index + 1}. ${entry.input} | short | valid=${entry.isValid ? "yes" : "no"} | type=${entry.typeIdentifier ?? "None"} | context=${entry.context ?? "None"}`;
+            console.log(line);
           } else {
-            console.log(
-              `${index + 1}. ${entry.id.hex} | type=${entry.typeIdentifier ?? "None"} | context=${entry.context ?? "None"} | ts=${entry.createdTimestampReadable}`,
-            );
+            const line = `${index + 1}. ${entry.id.hex} | type=${entry.typeIdentifier ?? "None"} | context=${entry.context ?? "None"} | ts=${entry.createdTimestampReadable}`;
+            console.log(line);
           }
         });
       } else {
