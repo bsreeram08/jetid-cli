@@ -24,7 +24,7 @@ jobs:
             goos: darwin
             goarch: arm64
             outfile: jetid-macos-arm64
-          - os: macos-13
+          - os: macos-latest
             goos: darwin
             goarch: amd64
             outfile: jetid-macos-x64
