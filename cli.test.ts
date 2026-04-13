@@ -13,6 +13,7 @@ test("should generate a list of ids with --count", () => {
   const output = new TextDecoder().decode(process.stdout).trim().split("\n");
   expect(output.length).toBe(3);
   output.forEach((id) => expect(id).toMatch(/^[0-9a-f]{18}$/));
+  expect(new Set(output).size).toBe(3);
 });
 
 test("should explain a single id in json format", () => {

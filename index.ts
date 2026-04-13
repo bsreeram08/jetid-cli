@@ -76,6 +76,20 @@ function isImplicitShortId(input: string | bigint, hasFromFlag: boolean): input 
   return typeof input === "string" && input.length === 9 && !hasFromFlag && validateShortId(input);
 }
 
+function parseDecimalList(value: string): bigint[] {
+  return value
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => {
+      try {
+        return BigInt(id);
+      } catch {
+        throw new Error(`Invalid decimal ID in list: ${id}`);
+      }
+    });
+}
+
 function toYaml(value: unknown, indent = 0): string {
   const pad = "  ".repeat(indent);
 
@@ -293,7 +307,7 @@ const options: { clientId?: string; context?: string } = {};
 if (typeof values.clientId === "string") options.clientId = values.clientId;
 if (typeof values.context === "string") options.context = values.context;
 
-type EXPLAIN_FORMAT = "table" | "json" | "yaml" | "list";
+type ExplainFormat = "table" | "json" | "yaml" | "list";
 type JetIdExplainEntry = Omit<ReturnType<typeof explainId>, "id" | "sequence"> & {
   kind: "JETID";
   id: {
@@ -320,12 +334,12 @@ try {
   let idToProcess: string | bigint | undefined;
   let batchGeneratedIds: Array<string | bigint> | undefined;
   let fromRepresentation: REPRESENTATION_TYPE = "URLSAFE";
-  const formatInput = typeof values.format === "string" ? values.format.toLowerCase() : "table";
+  const parsedFormat = typeof values.format === "string" ? values.format.toLowerCase() : "table";
   const generationCount = typeof values.count === "string" ? Number.parseInt(values.count, 10) : 1;
-  if (!isExplainFormat(formatInput)) {
+  if (!isExplainFormat(parsedFormat)) {
     throw new Error("Invalid format. Use one of: table, json, yaml, list");
   }
-  const explainFormat: EXPLAIN_FORMAT = formatInput;
+  const explainFormat: ExplainFormat = parsedFormat;
   if (!Number.isInteger(generationCount) || generationCount < 1) {
     throw new Error("count must be a positive integer");
   }
@@ -381,19 +395,6 @@ try {
         result = validateId(idToProcess as any, fromRepresentation, typeId);
       }
     } else if (values.explain) {
-      const parseDecimalList = (value: string): bigint[] => {
-        return value
-          .split(",")
-          .map((id) => id.trim())
-          .filter(Boolean)
-          .map((id) => {
-            try {
-              return BigInt(id);
-            } catch {
-              throw new Error(`Invalid decimal ID in list: ${id}`);
-            }
-          });
-      };
       let idsToExplain: Array<string | bigint>;
       if (batchGeneratedIds) {
         idsToExplain = [...batchGeneratedIds];
