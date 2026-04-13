@@ -27,7 +27,7 @@ A standard 80-bit `jetid` (URL-safe) consists of:
 ## Features
 
 - **Multi-Platform**: Native binaries for Linux, macOS, and Windows (x64 & ARM64).
-- **Fast**: Built with Bun for near-instant execution.
+- **Fast**: ~19 MB binary with ~20 MB RAM footprint.
 - **Self-Updating**: Built-in update mechanism to stay current with the latest features.
 - **Zero Dependencies**: Single standalone binary for your architecture.
 
@@ -142,17 +142,45 @@ jetid g9U5ZgjBsAwB --compare anotherIdHere
 
 ## Development
 
-Run tests:
 ```bash
-bun test
+bun install       # install dependencies
+bun index.ts      # run CLI locally
+bun test          # run tests
+bunx tsc --noEmit # type check
 ```
 
-## Build and Release
+## How It's Built
 
-The project includes a GitHub Action for automated multi-arch builds. To trigger a release:
-1. Update version in `package.json`
-2. Tag your commit: `git tag vX.X.X`
-3. Push the tag: `git push origin vX.X.X`
+The CLI is written in TypeScript and distributed as a self-contained Go binary:
+
+1. **Bundle** — `bun build` compiles `index.ts` + `@jetit/id` into a single 38 KB CommonJS bundle (`go/bundle.js`).
+2. **Embed** — The Go binary (`go/main.go`) embeds `bundle.js` at compile time via `//go:embed`.
+3. **Runtime** — [Goja](https://github.com/dop251/goja) (pure-Go ES2015+ engine) executes the bundle with thin Go polyfills for `process`, `console`, `crypto`, `fetch`, and `child_process`.
+
+This keeps the logic entirely in TypeScript while producing a lean native binary — no Bun or Node.js required at runtime.
+
+### Local build
+
+```bash
+bun run build:bundle          # produces go/bundle.js
+cd go && go build -o jetid .  # produces ./jetid binary
+```
+
+## Release
+
+The CI pipeline runs only on version tags. To release:
+
+```bash
+# 1. bump version in package.json
+# 2. commit, tag, push
+git tag vX.X.X && git push origin vX.X.X
+```
+
+GitHub Actions will:
+- Build the JS bundle once on Ubuntu
+- Fan out to 5 parallel Go builds (linux-x64, linux-arm64, macos-arm64, macos-x64, windows-x64 cross-compiled from Linux)
+- Ad-hoc sign macOS binaries with `codesign`
+- Publish a GitHub Release with all binaries attached
 
 ## License
 
