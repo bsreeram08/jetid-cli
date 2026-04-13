@@ -8,7 +8,28 @@ on:
     branches: [ main ]
 
 jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Bundle JS
+        run: bun run build:bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: js-bundle
+          path: go/bundle.js
+
   build:
+    needs: bundle
     strategy:
       matrix:
         include:
@@ -36,19 +57,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/download-artifact@v4
         with:
-          bun-version: latest
+          name: js-bundle
+          path: go
 
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-
-      - name: Install JS dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Bundle JS
-        run: bun run build:bundle
+          cache-dependency-path: go/go.sum
 
       - name: Build Go binary
         run: |
@@ -66,8 +83,7 @@ jobs:
         run: ls -lh ${{ matrix.outfile }}
         shell: bash
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.outfile }}
           path: ${{ matrix.outfile }}
@@ -81,15 +97,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
           pattern: jetid-*
           merge-multiple: true
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           files: artifacts/jetid-*
         env:
