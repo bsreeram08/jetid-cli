@@ -293,7 +293,7 @@ const options: { clientId?: string; context?: string } = {};
 if (typeof values.clientId === "string") options.clientId = values.clientId;
 if (typeof values.context === "string") options.context = values.context;
 
-type ExplainFormat = "table" | "json" | "yaml" | "list";
+type EXPLAIN_FORMAT = "table" | "json" | "yaml" | "list";
 type JetIdExplainEntry = Omit<ReturnType<typeof explainId>, "id" | "sequence"> & {
   kind: "JETID";
   id: {
@@ -318,15 +318,15 @@ try {
   let result: any;
   let isShortId = false;
   let idToProcess: string | bigint | undefined;
-  let generatedIds: Array<string | bigint> | undefined;
+  let batchGeneratedIds: Array<string | bigint> | undefined;
   let fromRepresentation: REPRESENTATION_TYPE = "URLSAFE";
   const formatInput = typeof values.format === "string" ? values.format.toLowerCase() : "table";
-  const count = typeof values.count === "string" ? Number.parseInt(values.count, 10) : 1;
+  const generationCount = typeof values.count === "string" ? Number.parseInt(values.count, 10) : 1;
   if (!isExplainFormat(formatInput)) {
     throw new Error("Invalid format. Use one of: table, json, yaml, list");
   }
-  const explainFormat: ExplainFormat = formatInput;
-  if (!Number.isInteger(count) || count < 1) {
+  const explainFormat: EXPLAIN_FORMAT = formatInput;
+  if (!Number.isInteger(generationCount) || generationCount < 1) {
     throw new Error("count must be a positive integer");
   }
 
@@ -344,28 +344,28 @@ try {
     if (!typeId) {
       throw new Error("Short ID requires a type identifier (e.g., --short '0A')");
     }
-    generatedIds = Array.from({ length: count }, () => generateShortId(typeId as SHORTID_TYPE, options));
-    idToProcess = generatedIds[0];
+    batchGeneratedIds = Array.from({ length: generationCount }, () => generateShortId(typeId as SHORTID_TYPE, options));
+    idToProcess = batchGeneratedIds[0];
     isShortId = true;
   } else if (values.hex !== undefined) {
     const typeId = typeof values.hex === "string" && values.hex !== "" ? values.hex : undefined;
-    generatedIds = Array.from({ length: count }, () => generateID("HEX", typeId, options));
-    idToProcess = generatedIds[0];
+    batchGeneratedIds = Array.from({ length: generationCount }, () => generateID("HEX", typeId, options));
+    idToProcess = batchGeneratedIds[0];
     fromRepresentation = "HEX";
   } else if (values.decimal !== undefined) {
     const typeId = typeof values.decimal === "string" && values.decimal !== "" ? values.decimal : undefined;
-    generatedIds = Array.from({ length: count }, () => generateID("DECIMAL", typeId, options));
-    idToProcess = generatedIds[0];
+    batchGeneratedIds = Array.from({ length: generationCount }, () => generateID("DECIMAL", typeId, options));
+    idToProcess = batchGeneratedIds[0];
     fromRepresentation = "DECIMAL";
   } else if (values.binary !== undefined) {
     const typeId = typeof values.binary === "string" && values.binary !== "" ? values.binary : undefined;
-    generatedIds = Array.from({ length: count }, () => generateID("BINARY", typeId, options));
-    idToProcess = generatedIds[0];
+    batchGeneratedIds = Array.from({ length: generationCount }, () => generateID("BINARY", typeId, options));
+    idToProcess = batchGeneratedIds[0];
     fromRepresentation = "BINARY";
   } else {
     const typeId = typeof values.urlsafe === "string" && values.urlsafe !== "" ? values.urlsafe : undefined;
-    generatedIds = Array.from({ length: count }, () => generateID("URLSAFE", typeId, options));
-    idToProcess = generatedIds[0];
+    batchGeneratedIds = Array.from({ length: generationCount }, () => generateID("URLSAFE", typeId, options));
+    idToProcess = batchGeneratedIds[0];
     fromRepresentation = "URLSAFE";
   }
 
@@ -394,13 +394,16 @@ try {
             }
           });
       };
-      const idsToExplain: Array<string | bigint> = generatedIds
-        ? [...generatedIds]
-        : explainFormat === "list" && typeof rawId === "string"
-          ? fromRepresentation === "DECIMAL"
-            ? parseDecimalList(rawId)
-            : rawId.split(",").map((id) => id.trim()).filter(Boolean)
-          : [idToProcess];
+      let idsToExplain: Array<string | bigint>;
+      if (batchGeneratedIds) {
+        idsToExplain = [...batchGeneratedIds];
+      } else if (explainFormat === "list" && typeof rawId === "string") {
+        idsToExplain = fromRepresentation === "DECIMAL"
+          ? parseDecimalList(rawId)
+          : rawId.split(",").map((id) => id.trim()).filter(Boolean);
+      } else {
+        idsToExplain = [idToProcess];
+      }
       const entries: ExplainEntry[] = idsToExplain.map((currentId) => {
         const currentIsShort = isImplicitShortId(currentId, typeof values.from === "string");
         if (currentIsShort) {
@@ -496,7 +499,7 @@ try {
       if (isShortId) throw new Error("Short IDs cannot be converted between representations");
       result = convertIdRepresentation(idToProcess as any, fromRepresentation, toVal);
     } else {
-      result = generatedIds ?? idToProcess;
+      result = batchGeneratedIds ?? idToProcess;
     }
   }
 
