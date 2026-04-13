@@ -43,6 +43,70 @@ function preprocessArgs(args: string[]): string[] {
   return result;
 }
 
+function stringifyWithBigInt(value: unknown): string {
+  return JSON.stringify(
+    value,
+    (_key, currentValue) => (typeof currentValue === "bigint" ? currentValue.toString() : currentValue),
+    2,
+  );
+}
+
+function formatYamlScalar(value: unknown): string {
+  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "bigint") return `"${value.toString()}"`;
+  if (value === null) return "null";
+  return String(value);
+}
+
+function toYaml(value: unknown, indent = 0): string {
+  const pad = "  ".repeat(indent);
+
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
+    return `${pad}${formatYamlScalar(value)}`;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return `${pad}[]`;
+    return value
+      .map((item) => {
+        const isScalar =
+          item === null ||
+          typeof item === "string" ||
+          typeof item === "number" ||
+          typeof item === "boolean" ||
+          typeof item === "bigint";
+        if (isScalar) {
+          return `${pad}- ${formatYamlScalar(item)}`;
+        }
+        return `${pad}-\n${toYaml(item, indent + 1)}`;
+      })
+      .join("\n");
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0) return `${pad}{}`;
+  return entries
+    .map(([key, entryValue]) => {
+      const isScalar =
+        entryValue === null ||
+        typeof entryValue === "string" ||
+        typeof entryValue === "number" ||
+        typeof entryValue === "boolean" ||
+        typeof entryValue === "bigint";
+      if (isScalar) {
+        return `${pad}${key}: ${formatYamlScalar(entryValue)}`;
+      }
+      return `${pad}${key}:\n${toYaml(entryValue, indent + 1)}`;
+    })
+    .join("\n");
+}
+
 const { values, positionals } = parseArgs({
   args: preprocessArgs(Bun.argv.slice(2)),
   options: {
@@ -66,6 +130,8 @@ const { values, positionals } = parseArgs({
     compare: { type: "string" },
     getType: { type: "boolean" },
     getContext: { type: "boolean" },
+    format: { type: "string" },
+    count: { type: "string" },
     rrn: { type: "string" },
     uninstall: { type: "boolean" },
   },
@@ -96,6 +162,8 @@ Options:
   --compare <id2>    Compare current ID with another ID (ignoring context)
   --getType          Extract type identifier from an ID
   --getContext       Extract context field from an ID
+  --format <fmt>     Output format for --explain (table|json|yaml|list)
+  --count <n>        Generate n IDs at once (generation commands only)
   --rrn [stan]       Generate a Retrieval Reference Number (optional STAN)
   --uninstall        Uninstall jetid-cli from your system
   --check-updates    Check for a newer version on GitHub
@@ -115,6 +183,9 @@ Examples:
   jetid ABC123DEF --from URLSAFE --to DECIMAL
   jetid --validate g6bwhyBZKFkd
   jetid --explain g6bwhyBZKFkd
+  jetid --explain --from HEX --format json 84055ede06e8b37e15
+  jetid --explain --from HEX --format list 84055ede06e8b37e15,84055ede06e8b37e16
+  jetid --hex '05' --count 5
   jetid g6bwhyBZKFkd --getType
   jetid --rrn
   jetid --uninstall
@@ -226,7 +297,16 @@ try {
   let result: any;
   let isShortId = false;
   let idToProcess: string | bigint | undefined;
+  let generatedIds: Array<string | bigint> | undefined;
   let fromRepresentation: REPRESENTATION_TYPE = "URLSAFE";
+  const explainFormat = (typeof values.format === "string" ? values.format.toLowerCase() : "table") as "table" | "json" | "yaml" | "list";
+  const count = typeof values.count === "string" ? Number.parseInt(values.count, 10) : 1;
+  if (!["table", "json", "yaml", "list"].includes(explainFormat)) {
+    throw new Error("Invalid format. Use one of: table, json, yaml, list");
+  }
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error("count must be a positive integer");
+  }
 
   const rawId = (values.convert as string | undefined) || positionals[0];
 
@@ -242,23 +322,28 @@ try {
     if (!typeId) {
       throw new Error("Short ID requires a type identifier (e.g., --short '0A')");
     }
-    idToProcess = generateShortId(typeId as SHORTID_TYPE, options);
+    generatedIds = Array.from({ length: count }, () => generateShortId(typeId as SHORTID_TYPE, options));
+    idToProcess = generatedIds[0];
     isShortId = true;
   } else if (values.hex !== undefined) {
     const typeId = typeof values.hex === "string" && values.hex !== "" ? values.hex : undefined;
-    idToProcess = generateID("HEX", typeId, options);
+    generatedIds = Array.from({ length: count }, () => generateID("HEX", typeId, options));
+    idToProcess = generatedIds[0];
     fromRepresentation = "HEX";
   } else if (values.decimal !== undefined) {
     const typeId = typeof values.decimal === "string" && values.decimal !== "" ? values.decimal : undefined;
-    idToProcess = generateID("DECIMAL", typeId, options);
+    generatedIds = Array.from({ length: count }, () => generateID("DECIMAL", typeId, options));
+    idToProcess = generatedIds[0];
     fromRepresentation = "DECIMAL";
   } else if (values.binary !== undefined) {
     const typeId = typeof values.binary === "string" && values.binary !== "" ? values.binary : undefined;
-    idToProcess = generateID("BINARY", typeId, options);
+    generatedIds = Array.from({ length: count }, () => generateID("BINARY", typeId, options));
+    idToProcess = generatedIds[0];
     fromRepresentation = "BINARY";
   } else {
     const typeId = typeof values.urlsafe === "string" && values.urlsafe !== "" ? values.urlsafe : undefined;
-    idToProcess = generateID("URLSAFE", typeId, options);
+    generatedIds = Array.from({ length: count }, () => generateID("URLSAFE", typeId, options));
+    idToProcess = generatedIds[0];
     fromRepresentation = "URLSAFE";
   }
 
@@ -274,33 +359,84 @@ try {
         result = validateId(idToProcess as any, fromRepresentation, typeId);
       }
     } else if (values.explain) {
-      if (isShortId) {
-        const details = getShortIdComponents(idToProcess as string);
-        console.log(`\n\x1b[1m\x1b[34mShort ID Breakdown\x1b[0m`);
-        console.log(`\x1b[90m--------------------------------\x1b[0m`);
-        console.log(`\x1b[1mID:\x1b[0m              ${idToProcess}`);
-        console.log(`\x1b[1mValid:\x1b[0m           ${details.isValid ? "\x1b[32mYes\x1b[0m" : "\x1b[31mNo\x1b[0m"}`);
-        if (details.isValid) {
-          console.log(`\x1b[1mTimestamp:\x1b[0m       ${details.timestamp!.toISOString()}`);
-          console.log(`\x1b[1mType Identifier:\x1b[0m ${details.typeIdentifier || "None"}`);
-          if (details.context) console.log(`\x1b[1mContext:\x1b[0m         ${details.context}`);
+      const idsToExplain: Array<string | bigint> = generatedIds
+        ? [...generatedIds]
+        : explainFormat === "list" && typeof rawId === "string"
+          ? rawId.split(",").map((id) => id.trim()).filter(Boolean).map((id) => (fromRepresentation === "DECIMAL" ? BigInt(id) : id))
+          : [idToProcess];
+      const entries = idsToExplain.map((currentId) => {
+        const currentIsShort =
+          typeof currentId === "string" && currentId.length === 9 && typeof values.from !== "string" && validateShortId(currentId);
+        if (currentIsShort) {
+          const details = getShortIdComponents(currentId);
+          return {
+            input: currentId,
+            kind: "SHORT",
+            isValid: details.isValid,
+            timestamp: details.timestamp ? details.timestamp.toISOString() : null,
+            typeIdentifier: details.typeIdentifier ?? null,
+            context: details.context ?? null,
+          };
         }
+        const details = explainId(currentId as any, fromRepresentation);
+        return {
+          kind: "JETID",
+          ...details,
+          id: {
+            ...details.id,
+            decimal: details.id.decimal.toString(),
+          },
+          sequence: details.sequence.toString(),
+        };
+      });
+
+      if (explainFormat === "json") {
+        console.log(stringifyWithBigInt(entries.length === 1 ? entries[0] : entries));
+      } else if (explainFormat === "yaml") {
+        console.log(toYaml(entries.length === 1 ? entries[0] : entries));
+      } else if (explainFormat === "list") {
+        entries.forEach((entry, index) => {
+          if (entry.kind === "SHORT") {
+            console.log(`${index + 1}. ${entry.input} | short | valid=${entry.isValid ? "yes" : "no"} | type=${entry.typeIdentifier ?? "None"} | context=${entry.context ?? "None"}`);
+          } else {
+            console.log(
+              `${index + 1}. ${(entry as any).id.hex} | type=${(entry as any).typeIdentifier ?? "None"} | context=${(entry as any).context ?? "None"} | ts=${(entry as any).createdTimestampReadable}`,
+            );
+          }
+        });
       } else {
-        const details = explainId(idToProcess as any, fromRepresentation);
-        console.log(`\n\x1b[1m\x1b[34mJetID Component Breakdown\x1b[0m`);
-        console.log(`\x1b[90m--------------------------------\x1b[0m`);
-        console.log(`\x1b[1mURL-Safe:\x1b[0m        \x1b[36m${details.id.urlsafe}\x1b[0m`);
-        console.log(`\x1b[1mHex:\x1b[0m             ${details.id.hex}`);
-        console.log(`\x1b[1mDecimal:\x1b[0m         ${details.id.decimal.toString()}`);
-        console.log(`\x1b[1mBinary:\x1b[0m          ${details.id.binary}`);
-        console.log(`\x1b[90m--------------------------------\x1b[0m`);
-        console.log(`\x1b[1mTimestamp:\x1b[0m       ${details.createdTimestampReadable}`);
-        console.log(`\x1b[1mClient ID:\x1b[0m       \x1b[35m${details.clientId}\x1b[0m`);
-        console.log(`\x1b[1mSequence:\x1b[0m        ${details.sequence.toString()}`);
-        console.log(`\x1b[1mType ID:\x1b[0m         \x1b[33m${details.typeIdentifier || "None"}\x1b[0m`);
-        if (details.context) {
-          console.log(`\x1b[1mContext:\x1b[0m         \x1b[32m${details.context}\x1b[0m`);
-        }
+        entries.forEach((entry, index) => {
+          if (entries.length > 1) {
+            console.log(`\n\x1b[1m\x1b[34mEntry ${index + 1}\x1b[0m`);
+          }
+          if (entry.kind === "SHORT") {
+            console.log(`\n\x1b[1m\x1b[34mShort ID Breakdown\x1b[0m`);
+            console.log(`\x1b[90m--------------------------------\x1b[0m`);
+            console.log(`\x1b[1mID:\x1b[0m              ${entry.input}`);
+            console.log(`\x1b[1mValid:\x1b[0m           ${entry.isValid ? "\x1b[32mYes\x1b[0m" : "\x1b[31mNo\x1b[0m"}`);
+            if (entry.isValid && entry.timestamp) {
+              console.log(`\x1b[1mTimestamp:\x1b[0m       ${entry.timestamp}`);
+              console.log(`\x1b[1mType Identifier:\x1b[0m ${entry.typeIdentifier || "None"}`);
+              if (entry.context) console.log(`\x1b[1mContext:\x1b[0m         ${entry.context}`);
+            }
+          } else {
+            const jetEntry = entry as any;
+            console.log(`\n\x1b[1m\x1b[34mJetID Component Breakdown\x1b[0m`);
+            console.log(`\x1b[90m--------------------------------\x1b[0m`);
+            console.log(`\x1b[1mURL-Safe:\x1b[0m        \x1b[36m${jetEntry.id.urlsafe}\x1b[0m`);
+            console.log(`\x1b[1mHex:\x1b[0m             ${jetEntry.id.hex}`);
+            console.log(`\x1b[1mDecimal:\x1b[0m         ${jetEntry.id.decimal}`);
+            console.log(`\x1b[1mBinary:\x1b[0m          ${jetEntry.id.binary}`);
+            console.log(`\x1b[90m--------------------------------\x1b[0m`);
+            console.log(`\x1b[1mTimestamp:\x1b[0m       ${jetEntry.createdTimestampReadable}`);
+            console.log(`\x1b[1mClient ID:\x1b[0m       \x1b[35m${jetEntry.clientId}\x1b[0m`);
+            console.log(`\x1b[1mSequence:\x1b[0m        ${jetEntry.sequence}`);
+            console.log(`\x1b[1mType ID:\x1b[0m         \x1b[33m${jetEntry.typeIdentifier || "None"}\x1b[0m`);
+            if (jetEntry.context) {
+              console.log(`\x1b[1mContext:\x1b[0m         \x1b[32m${jetEntry.context}\x1b[0m`);
+            }
+          }
+        });
       }
       result = undefined;
     } else if (values.compare) {
@@ -325,12 +461,16 @@ try {
       if (isShortId) throw new Error("Short IDs cannot be converted between representations");
       result = convertIdRepresentation(idToProcess as any, fromRepresentation, toVal);
     } else {
-      result = idToProcess;
+      result = generatedIds ?? idToProcess;
     }
   }
 
   if (result !== undefined && result !== null) {
-    console.log(result.toString());
+    if (Array.isArray(result)) {
+      result.forEach((item) => console.log(item.toString()));
+    } else {
+      console.log(result.toString());
+    }
   }
 } catch (error) {
   console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
