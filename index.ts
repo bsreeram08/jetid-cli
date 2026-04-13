@@ -123,8 +123,9 @@ function toYaml(value: unknown, indent = 0): string {
     .join("\n");
 }
 
+async function main() {
 const { values, positionals } = parseArgs({
-  args: preprocessArgs(Bun.argv.slice(2)),
+  args: preprocessArgs(process.argv.slice(2)),
   options: {
     hex: { type: "string" },
     urlsafe: { type: "string" },
@@ -517,3 +518,6 @@ try {
   console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 }
+} // end main()
+
+main();

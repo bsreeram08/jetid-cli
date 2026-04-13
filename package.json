@@ -18,6 +18,9 @@
   "peerDependencies": {
     "typescript": "^5"
   },
+  "scripts": {
+    "build:bundle": "bun build ./index.ts --target=node --format=cjs --outfile=go/bundle.js"
+  },
   "dependencies": {
     "@jetit/id": "^1.0.2"
   }

@@ -11,9 +11,9 @@ GITHUB_API="https://api.github.com/repos/$REPO/releases/latest"
 # Detect OS
 OS_NAME=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$OS_NAME" in
-  darwin*)  OS="macos-latest" ;;
-  linux*)   OS="ubuntu-latest" ;;
-  msys*|cygwin*|mingw*) OS="windows-latest" ;;
+  darwin*)  OS="macos" ;;
+  linux*)   OS="linux" ;;
+  msys*|cygwin*|mingw*) OS="windows" ;;
   *)        echo "Unsupported OS: $OS_NAME"; exit 1 ;;
 esac
 
@@ -25,8 +25,8 @@ case "$ARCH_NAME" in
   *)            echo "Unsupported architecture: $ARCH_NAME"; exit 1 ;;
 esac
 
-# Windows arm64 is not supported in the current workflow
-if [ "$OS" = "windows-latest" ] && [ "$ARCH" = "arm64" ]; then
+# Windows arm64 is not supported
+if [ "$OS" = "windows" ] && [ "$ARCH" = "arm64" ]; then
   echo "Windows ARM64 is not supported."
   exit 1
 fi
@@ -44,7 +44,7 @@ echo "Installing jetid $VERSION for $OS-$ARCH..."
 
 # Find the download URL for the matched asset
 BINARY_NAME="jetid-$OS-$ARCH"
-if [ "$OS" = "windows-latest" ]; then
+if [ "$OS" = "windows" ]; then
   BINARY_NAME="$BINARY_NAME.exe"
 fi
 
@@ -85,12 +85,10 @@ $SUDO chmod +x "$TARGET"
 
 rm -rf "$TMP_DIR"
 
-# On macOS, Bun compiled binaries have an invalid embedded signature.
-# Remove it and re-sign ad-hoc so macOS does not kill the binary.
+# On macOS, strip the quarantine attribute added by the browser/curl download.
+# Go binaries built with codesign --sign - in CI are properly signed already.
 if [ "$OS_NAME" = "darwin" ]; then
   xattr -d com.apple.quarantine "$TARGET" 2>/dev/null || true
-  codesign --remove-signature "$TARGET" 2>/dev/null || true
-  codesign --sign - --force "$TARGET" 2>/dev/null || true
 fi
 
 echo "Successfully installed jetid!"
