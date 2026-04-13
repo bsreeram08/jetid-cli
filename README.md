@@ -52,6 +52,9 @@ jetid --urlsafe
 # Generate a Short ID (9 characters)
 jetid --short '0A'
 
+# Generate 5 IDs at once
+jetid --hex '05' --count 5
+
 # Generate a Decimal or Binary ID
 jetid --decimal
 jetid --binary
@@ -106,6 +109,15 @@ jetid 2434536435913247950341 --from DECIMAL --to URLSAFE
 # Explain all components of a URLSAFE ID (shows all 4 representations)
 jetid --explain g9U5ZgjBsAwB
 
+# Explain in JSON
+jetid --explain --from HEX --format json 84055ede06e8b37e15
+
+# Explain in YAML
+jetid --explain --from HEX --format yaml 84055ede06e8b37e15
+
+# Explain a comma-separated list of IDs
+jetid --explain --from HEX --format list 84055ede06e8b37e15,84055ede06e8b37e16,84055ede06e8b37e17
+
 # Validate a URLSAFE ID
 jetid --validate g9U5ZgjBsAwB
 
@@ -123,6 +135,8 @@ jetid g9U5ZgjBsAwB --compare anotherIdHere
 
 - `--clientId <id>`: Provide custom client ID (1-3 chars for long IDs)
 - `--context <ctx>`: Provide 8-bit context field (hex byte 00-FF)
+- `--count <n>`: Generate `n` IDs at once for generation commands
+- `--format <fmt>`: Explain output format: `table`, `json`, `yaml`, `list`
 - `--check-updates`: Check for a newer version on GitHub
 - `--update`: Update to the latest version automatically
 
