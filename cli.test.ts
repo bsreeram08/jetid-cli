@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { generateID } from "@jetit/id";
 
-const cliPath = "/home/runner/work/jetid-cli/jetid-cli/index.ts";
+const cliPath = new URL("./index.ts", import.meta.url).pathname;
 
 test("should generate a list of ids with --count", () => {
   const process = Bun.spawnSync({

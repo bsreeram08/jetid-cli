@@ -58,16 +58,24 @@ function formatYamlScalar(value: unknown): string {
   return String(value);
 }
 
-function toYaml(value: unknown, indent = 0): string {
-  const pad = "  ".repeat(indent);
-
-  if (
+function isScalarValue(value: unknown): boolean {
+  return (
     value === null ||
     typeof value === "string" ||
     typeof value === "number" ||
     typeof value === "boolean" ||
     typeof value === "bigint"
-  ) {
+  );
+}
+
+function isExplainFormat(value: string): value is "table" | "json" | "yaml" | "list" {
+  return ["table", "json", "yaml", "list"].includes(value);
+}
+
+function toYaml(value: unknown, indent = 0): string {
+  const pad = "  ".repeat(indent);
+
+  if (isScalarValue(value)) {
     return `${pad}${formatYamlScalar(value)}`;
   }
 
@@ -75,13 +83,7 @@ function toYaml(value: unknown, indent = 0): string {
     if (value.length === 0) return `${pad}[]`;
     return value
       .map((item) => {
-        const isScalar =
-          item === null ||
-          typeof item === "string" ||
-          typeof item === "number" ||
-          typeof item === "boolean" ||
-          typeof item === "bigint";
-        if (isScalar) {
+        if (isScalarValue(item)) {
           return `${pad}- ${formatYamlScalar(item)}`;
         }
         return `${pad}-\n${toYaml(item, indent + 1)}`;
@@ -93,13 +95,7 @@ function toYaml(value: unknown, indent = 0): string {
   if (entries.length === 0) return `${pad}{}`;
   return entries
     .map(([key, entryValue]) => {
-      const isScalar =
-        entryValue === null ||
-        typeof entryValue === "string" ||
-        typeof entryValue === "number" ||
-        typeof entryValue === "boolean" ||
-        typeof entryValue === "bigint";
-      if (isScalar) {
+      if (isScalarValue(entryValue)) {
         return `${pad}${key}: ${formatYamlScalar(entryValue)}`;
       }
       return `${pad}${key}:\n${toYaml(entryValue, indent + 1)}`;
@@ -293,17 +289,39 @@ const options: { clientId?: string; context?: string } = {};
 if (typeof values.clientId === "string") options.clientId = values.clientId;
 if (typeof values.context === "string") options.context = values.context;
 
+type ExplainFormat = "table" | "json" | "yaml" | "list";
+type JetIdExplainEntry = Omit<ReturnType<typeof explainId>, "id" | "sequence"> & {
+  kind: "JETID";
+  id: {
+    urlsafe: string;
+    hex: string;
+    decimal: string;
+    binary: string;
+  };
+  sequence: string;
+};
+type ShortExplainEntry = {
+  input: string;
+  kind: "SHORT";
+  isValid: boolean;
+  timestamp: string | null;
+  typeIdentifier: string | null;
+  context: string | null;
+};
+type ExplainEntry = JetIdExplainEntry | ShortExplainEntry;
+
 try {
   let result: any;
   let isShortId = false;
   let idToProcess: string | bigint | undefined;
   let generatedIds: Array<string | bigint> | undefined;
   let fromRepresentation: REPRESENTATION_TYPE = "URLSAFE";
-  const explainFormat = (typeof values.format === "string" ? values.format.toLowerCase() : "table") as "table" | "json" | "yaml" | "list";
+  const rawExplainFormat = typeof values.format === "string" ? values.format.toLowerCase() : "table";
   const count = typeof values.count === "string" ? Number.parseInt(values.count, 10) : 1;
-  if (!["table", "json", "yaml", "list"].includes(explainFormat)) {
+  if (!isExplainFormat(rawExplainFormat)) {
     throw new Error("Invalid format. Use one of: table, json, yaml, list");
   }
+  const explainFormat: ExplainFormat = rawExplainFormat;
   if (!Number.isInteger(count) || count < 1) {
     throw new Error("count must be a positive integer");
   }
@@ -359,12 +377,27 @@ try {
         result = validateId(idToProcess as any, fromRepresentation, typeId);
       }
     } else if (values.explain) {
+      const parseDecimalList = (value: string): bigint[] => {
+        return value
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+          .map((id) => {
+            try {
+              return BigInt(id);
+            } catch {
+              throw new Error(`Invalid decimal ID in list: ${id}`);
+            }
+          });
+      };
       const idsToExplain: Array<string | bigint> = generatedIds
         ? [...generatedIds]
         : explainFormat === "list" && typeof rawId === "string"
-          ? rawId.split(",").map((id) => id.trim()).filter(Boolean).map((id) => (fromRepresentation === "DECIMAL" ? BigInt(id) : id))
+          ? fromRepresentation === "DECIMAL"
+            ? parseDecimalList(rawId)
+            : rawId.split(",").map((id) => id.trim()).filter(Boolean)
           : [idToProcess];
-      const entries = idsToExplain.map((currentId) => {
+      const entries: ExplainEntry[] = idsToExplain.map((currentId) => {
         const currentIsShort =
           typeof currentId === "string" && currentId.length === 9 && typeof values.from !== "string" && validateShortId(currentId);
         if (currentIsShort) {
@@ -400,7 +433,7 @@ try {
             console.log(`${index + 1}. ${entry.input} | short | valid=${entry.isValid ? "yes" : "no"} | type=${entry.typeIdentifier ?? "None"} | context=${entry.context ?? "None"}`);
           } else {
             console.log(
-              `${index + 1}. ${(entry as any).id.hex} | type=${(entry as any).typeIdentifier ?? "None"} | context=${(entry as any).context ?? "None"} | ts=${(entry as any).createdTimestampReadable}`,
+              `${index + 1}. ${entry.id.hex} | type=${entry.typeIdentifier ?? "None"} | context=${entry.context ?? "None"} | ts=${entry.createdTimestampReadable}`,
             );
           }
         });
@@ -420,20 +453,19 @@ try {
               if (entry.context) console.log(`\x1b[1mContext:\x1b[0m         ${entry.context}`);
             }
           } else {
-            const jetEntry = entry as any;
             console.log(`\n\x1b[1m\x1b[34mJetID Component Breakdown\x1b[0m`);
             console.log(`\x1b[90m--------------------------------\x1b[0m`);
-            console.log(`\x1b[1mURL-Safe:\x1b[0m        \x1b[36m${jetEntry.id.urlsafe}\x1b[0m`);
-            console.log(`\x1b[1mHex:\x1b[0m             ${jetEntry.id.hex}`);
-            console.log(`\x1b[1mDecimal:\x1b[0m         ${jetEntry.id.decimal}`);
-            console.log(`\x1b[1mBinary:\x1b[0m          ${jetEntry.id.binary}`);
+            console.log(`\x1b[1mURL-Safe:\x1b[0m        \x1b[36m${entry.id.urlsafe}\x1b[0m`);
+            console.log(`\x1b[1mHex:\x1b[0m             ${entry.id.hex}`);
+            console.log(`\x1b[1mDecimal:\x1b[0m         ${entry.id.decimal}`);
+            console.log(`\x1b[1mBinary:\x1b[0m          ${entry.id.binary}`);
             console.log(`\x1b[90m--------------------------------\x1b[0m`);
-            console.log(`\x1b[1mTimestamp:\x1b[0m       ${jetEntry.createdTimestampReadable}`);
-            console.log(`\x1b[1mClient ID:\x1b[0m       \x1b[35m${jetEntry.clientId}\x1b[0m`);
-            console.log(`\x1b[1mSequence:\x1b[0m        ${jetEntry.sequence}`);
-            console.log(`\x1b[1mType ID:\x1b[0m         \x1b[33m${jetEntry.typeIdentifier || "None"}\x1b[0m`);
-            if (jetEntry.context) {
-              console.log(`\x1b[1mContext:\x1b[0m         \x1b[32m${jetEntry.context}\x1b[0m`);
+            console.log(`\x1b[1mTimestamp:\x1b[0m       ${entry.createdTimestampReadable}`);
+            console.log(`\x1b[1mClient ID:\x1b[0m       \x1b[35m${entry.clientId}\x1b[0m`);
+            console.log(`\x1b[1mSequence:\x1b[0m        ${entry.sequence}`);
+            console.log(`\x1b[1mType ID:\x1b[0m         \x1b[33m${entry.typeIdentifier || "None"}\x1b[0m`);
+            if (entry.context) {
+              console.log(`\x1b[1mContext:\x1b[0m         \x1b[32m${entry.context}\x1b[0m`);
             }
           }
         });
