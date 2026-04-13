@@ -7,6 +7,7 @@
 - **Run Single Test**: `bun test <filename>` (e.g., `bun test index.test.ts`)
 - **Type Check**: `bunx tsc --noEmit`
 - **Update Dependencies**: `bun update`
+- **Compile binary**: `bun build ./index.ts --compile --minify --bytecode --outfile jetid`
 
 ## Code Style Guidelines
 - **Imports**: Named imports only. `import { generateID } from "@jetit/id";`.

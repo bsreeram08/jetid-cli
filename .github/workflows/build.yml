@@ -33,9 +33,16 @@ jobs:
           else
             OUTFILE="jetid-${{ matrix.os }}-${{ matrix.arch }}"
           fi
-          bun build ./index.ts --compile --outfile "$OUTFILE"
+          bun build ./index.ts --compile --minify --outfile "$OUTFILE"
           ls -lh "$OUTFILE"
         shell: bash
+
+      - name: Sign binary (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          OUTFILE="jetid-${{ matrix.os }}-${{ matrix.arch }}"
+          codesign --remove-signature "$OUTFILE" || true
+          codesign --sign - --force "$OUTFILE"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4

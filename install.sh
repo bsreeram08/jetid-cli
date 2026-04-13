@@ -85,5 +85,13 @@ $SUDO chmod +x "$TARGET"
 
 rm -rf "$TMP_DIR"
 
+# On macOS, Bun compiled binaries have an invalid embedded signature.
+# Remove it and re-sign ad-hoc so macOS does not kill the binary.
+if [ "$OS_NAME" = "darwin" ]; then
+  xattr -d com.apple.quarantine "$TARGET" 2>/dev/null || true
+  codesign --remove-signature "$TARGET" 2>/dev/null || true
+  codesign --sign - --force "$TARGET" 2>/dev/null || true
+fi
+
 echo "Successfully installed jetid!"
 echo "Run 'jetid --help' to get started."

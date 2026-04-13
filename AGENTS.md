@@ -64,5 +64,9 @@ This project uses **Bun** as the primary runtime and package manager.
   test("should generate valid hex id", () => { ... });
   ```
 
-## Automated Rules (from .cursor/rules)
-*(No specific .cursorrules found in this repository. Follow the general guidelines above.)*
+## CI / Release Pipeline
+
+- Binaries are compiled via `bun build ./index.ts --compile --minify --bytecode --outfile <name>`.
+- Targets: `ubuntu-latest` (x64, arm64), `macos-latest` (x64, arm64), `windows-latest` (x64).
+- Releases are created automatically when a `v*` tag is pushed.
+- The install script (`install.sh`) detects OS/arch, downloads the matching binary from GitHub Releases, and strips the macOS quarantine attribute.
