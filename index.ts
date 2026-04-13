@@ -68,8 +68,10 @@ function isScalarValue(value: unknown): boolean {
   );
 }
 
+const explainFormats = ["table", "json", "yaml", "list"] as const;
+
 function isExplainFormat(value: string): value is "table" | "json" | "yaml" | "list" {
-  return ["table", "json", "yaml", "list"].includes(value);
+  return (explainFormats as readonly string[]).includes(value);
 }
 
 function isImplicitShortId(input: string | bigint, hasFromFlag: boolean): input is string {
@@ -308,7 +310,7 @@ if (typeof values.clientId === "string") options.clientId = values.clientId;
 if (typeof values.context === "string") options.context = values.context;
 
 type ExplainFormat = "table" | "json" | "yaml" | "list";
-type JetIdExplainEntry = Omit<ReturnType<typeof explainId>, "id" | "sequence"> & {
+type JetIDExplainEntry = Omit<ReturnType<typeof explainId>, "id" | "sequence"> & {
   kind: "JETID";
   id: {
     urlsafe: string;
@@ -326,7 +328,7 @@ type ShortExplainEntry = {
   typeIdentifier: string | null;
   context: string | null;
 };
-type ExplainEntry = JetIdExplainEntry | ShortExplainEntry;
+type ExplainEntry = JetIDExplainEntry | ShortExplainEntry;
 
 try {
   let result: any;
@@ -334,13 +336,13 @@ try {
   let idToProcess: string | bigint | undefined;
   let batchGeneratedIds: Array<string | bigint> | undefined;
   let fromRepresentation: REPRESENTATION_TYPE = "URLSAFE";
-  const parsedFormat = typeof values.format === "string" ? values.format.toLowerCase() : "table";
-  const generationCount = typeof values.count === "string" ? Number.parseInt(values.count, 10) : 1;
-  if (!isExplainFormat(parsedFormat)) {
+  const formatInput = typeof values.format === "string" ? values.format.toLowerCase() : "table";
+  const batchSize = typeof values.count === "string" ? Number.parseInt(values.count, 10) : 1;
+  if (!isExplainFormat(formatInput)) {
     throw new Error("Invalid format. Use one of: table, json, yaml, list");
   }
-  const explainFormat: ExplainFormat = parsedFormat;
-  if (!Number.isInteger(generationCount) || generationCount < 1) {
+  const explainFormat: ExplainFormat = formatInput;
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
     throw new Error("count must be a positive integer");
   }
 
@@ -358,27 +360,27 @@ try {
     if (!typeId) {
       throw new Error("Short ID requires a type identifier (e.g., --short '0A')");
     }
-    batchGeneratedIds = Array.from({ length: generationCount }, () => generateShortId(typeId as SHORTID_TYPE, options));
+    batchGeneratedIds = Array.from({ length: batchSize }, () => generateShortId(typeId as SHORTID_TYPE, options));
     idToProcess = batchGeneratedIds[0];
     isShortId = true;
   } else if (values.hex !== undefined) {
     const typeId = typeof values.hex === "string" && values.hex !== "" ? values.hex : undefined;
-    batchGeneratedIds = Array.from({ length: generationCount }, () => generateID("HEX", typeId, options));
+    batchGeneratedIds = Array.from({ length: batchSize }, () => generateID("HEX", typeId, options));
     idToProcess = batchGeneratedIds[0];
     fromRepresentation = "HEX";
   } else if (values.decimal !== undefined) {
     const typeId = typeof values.decimal === "string" && values.decimal !== "" ? values.decimal : undefined;
-    batchGeneratedIds = Array.from({ length: generationCount }, () => generateID("DECIMAL", typeId, options));
+    batchGeneratedIds = Array.from({ length: batchSize }, () => generateID("DECIMAL", typeId, options));
     idToProcess = batchGeneratedIds[0];
     fromRepresentation = "DECIMAL";
   } else if (values.binary !== undefined) {
     const typeId = typeof values.binary === "string" && values.binary !== "" ? values.binary : undefined;
-    batchGeneratedIds = Array.from({ length: generationCount }, () => generateID("BINARY", typeId, options));
+    batchGeneratedIds = Array.from({ length: batchSize }, () => generateID("BINARY", typeId, options));
     idToProcess = batchGeneratedIds[0];
     fromRepresentation = "BINARY";
   } else {
     const typeId = typeof values.urlsafe === "string" && values.urlsafe !== "" ? values.urlsafe : undefined;
-    batchGeneratedIds = Array.from({ length: generationCount }, () => generateID("URLSAFE", typeId, options));
+    batchGeneratedIds = Array.from({ length: batchSize }, () => generateID("URLSAFE", typeId, options));
     idToProcess = batchGeneratedIds[0];
     fromRepresentation = "URLSAFE";
   }
